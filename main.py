@@ -638,6 +638,16 @@ class MediaPlayer(QMainWindow):
         accent = preset.get("accent", "#F5C400")
         fg = preset.get("text", "#F7F7F8")
         muted = preset.get("muted", "#A5A5AC")
+        layout_mode = preset.get("layout", "hero-library-player")
+        sidebar_width, player_width, card_radius, nav_padding, row_padding = {
+            "hero-library-player": (218, 276, 16, 12, 11),
+            "library-main-now-playing": (224, 292, 10, 10, 9),
+            "stream-library-player": (196, 260, 7, 9, 8)
+        }.get(layout_mode, (218, 276, 12, 10, 9))
+        if hasattr(self, "sidebar"):
+            self.sidebar.setFixedWidth(sidebar_width)
+        if hasattr(self, "player_panel"):
+            self.player_panel.setFixedWidth(player_width)
         if hasattr(self, "accent") and theme_name == "Свой стиль":
             accent = self.accent.text() or accent
         font = self.font.text() if hasattr(self, "font") else self.settings.get("font", "Segoe UI")
@@ -656,15 +666,15 @@ class MediaPlayer(QMainWindow):
             QLabel#eyebrow {{ color:{muted}; font-size:10px; font-weight:700; letter-spacing:1.5px; }}
             QLabel#mutedText {{ color:{muted}; }}
             QLabel#coverPlaceholder {{ background:{bg}; border:1px solid #34343A; border-radius:14px; color:{accent}; font-size:68px; }}
-            QFrame#heroCard {{ background:{panel}; border:1px solid #303035; border-radius:16px; padding:18px; }}
+            QFrame#heroCard {{ background:{panel}; border:1px solid #303035; border-radius:{card_radius}px; padding:18px; }}
             QPushButton {{ background:#29292E; border:0; border-radius:9px; padding:10px 13px; color:{fg}; }}
             QPushButton:hover {{ background:{accent}; color:#111111; }}
-            QPushButton#navButton {{ background:transparent; color:{muted}; text-align:left; padding:12px 13px; border-radius:9px; }}
+            QPushButton#navButton {{ background:transparent; color:{muted}; text-align:left; padding:{nav_padding}px 13px; border-radius:{card_radius}px; }}
             QPushButton#navButton:hover {{ background:#29292E; color:{fg}; }}
             QPushButton#navButton[active="true"] {{ background:{panel}; color:{accent}; font-weight:700; }}
             QLineEdit,QListWidget,QComboBox,QSpinBox {{ background:{panel}; border:1px solid #38383F; border-radius:8px; padding:8px; color:{fg}; selection-background-color:{accent}; }}
             QListWidget#trackList {{ border:0; background:{bg}; alternate-background-color:{panel}; padding:6px; }}
-            QListWidget::item {{ padding:11px 10px; border-radius:7px; }}
+            QListWidget::item {{ padding:{row_padding}px 10px; border-radius:{card_radius}px; }}
             QListWidget::item:selected {{ background:{panel}; color:{accent}; }}
             QCheckBox {{ spacing:9px; }}
             QSlider::groove:horizontal {{ height:5px; background:#45454B; border-radius:2px; }}
