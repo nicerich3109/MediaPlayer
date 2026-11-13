@@ -17,7 +17,8 @@ from PySide6.QtGui import QAction, QFont, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QListWidget,
     QPushButton, QLabel, QSlider, QFileDialog, QLineEdit, QTabWidget,
-    QFormLayout, QComboBox, QCheckBox, QMessageBox, QInputDialog, QSpinBox, QListWidgetItem
+    QFormLayout, QComboBox, QCheckBox, QMessageBox, QInputDialog, QSpinBox, QListWidgetItem,
+    QFrame, QStackedWidget
 )
 
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
@@ -56,7 +57,7 @@ class MediaPlayer(QMainWindow):
     def __init__(self):
         super().__init__()
         self.settings = load_json(SETTINGS_FILE, DEFAULT_SETTINGS)
-        self.ui_config = load_json(UI_FILE, {"presets": {}})
+        self.ui_config = load_json(UI_FILE, {"active_preset": "Яндекс Музыка", "presets": {"Яндекс Музыка": {"background": "#121214", "panel": "#1B1B1F", "sidebar": "#151518", "accent": "#F5C400", "text": "#F7F7F8", "muted": "#A5A5AC"}, "Spotify": {"background": "#121212", "panel": "#181818", "sidebar": "#101010", "accent": "#1ED760", "text": "#FFFFFF", "muted": "#A7A7A7"}, "SoundCloud": {"background": "#101010", "panel": "#1A1A1A", "sidebar": "#141414", "accent": "#FF5500", "text": "#FFFFFF", "muted": "#A8A8A8"}}})
         self.instance = vlc.Instance("--no-video-title-show")
         self.player = self.instance.media_player_new()
         self.library = []
@@ -76,18 +77,87 @@ class MediaPlayer(QMainWindow):
 
     def build_ui(self):
         root = QWidget()
+        outer = QHBoxLayout(root)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
         self.setCentralWidget(root)
-        layout = QHBoxLayout(root)
-        self.tabs = QTabWidget()
-        layout.addWidget(self.tabs, 1)
+
+        self.sidebar = QFrame()
+        self.sidebar.setObjectName("sidebar")
+        self.sidebar.setFixedWidth(218)
+        side = QVBoxLayout(self.sidebar)
+        side.setContentsMargins(18, 24, 18, 18)
+        side.setSpacing(9)
+        brand = QLabel("MEDIA PLAYER")
+        brand.setObjectName("brand")
+        side.addWidget(brand)
+        side.addSpacing(22)
+        self.nav_buttons = []
+        for symbol, label, page in [("⌂", "Обзор", 0), ("♫", "Медиатека", 1), ("▤", "Плейлисты", 1), ("◒", "Эквалайзер", 2), ("✎", "Редактор тегов", 3), ("⚙", "Настройки", 4)]:
+            btn = QPushButton(f"{symbol}   {label}")
+            btn.setObjectName("navButton")
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.clicked.connect(lambda checked=False, i=page, item=btn: self.show_page(i, item))
+            side.addWidget(btn)
+            self.nav_buttons.append(btn)
+        side.addStretch()
+        hint = QLabel("Локальная музыка без копирования исходных файлов")
+        hint.setObjectName("mutedText")
+        hint.setWordWrap(True)
+        side.addWidget(hint)
+        outer.addWidget(self.sidebar)
+
+        self.pages = QStackedWidget()
+        self.pages.setObjectName("contentStack")
+
+        home = QWidget()
+        home_layout = QVBoxLayout(home)
+        home_layout.setContentsMargins(30, 28, 30, 28)
+        home_layout.setSpacing(18)
+        title = QLabel("Ваша музыка")
+        title.setObjectName("pageTitle")
+        home_layout.addWidget(title)
+        subtitle = QLabel("Вся локальная коллекция — в одном месте.")
+        subtitle.setObjectName("mutedText")
+        home_layout.addWidget(subtitle)
+        hero = QFrame()
+        hero.setObjectName("heroCard")
+        hero_layout = QVBoxLayout(hero)
+        hero_title = QLabel("Продолжайте слушать")
+        hero_title.setObjectName("heroTitle")
+        hero_layout.addWidget(hero_title)
+        self.overview_now = QLabel("Добавьте музыку или синхронизируйте выбранные папки.")
+        self.overview_now.setObjectName("mutedText")
+        self.overview_now.setWordWrap(True)
+        hero_layout.addWidget(self.overview_now)
+        hero_actions = QHBoxLayout()
+        add_home = QPushButton("Добавить файлы")
+        add_home.clicked.connect(self.add_files)
+        sync_home = QPushButton("Синхронизировать")
+        sync_home.clicked.connect(self.scan_library)
+        hero_actions.addWidget(add_home)
+        hero_actions.addWidget(sync_home)
+        hero_actions.addStretch()
+        hero_layout.addLayout(hero_actions)
+        home_layout.addWidget(hero)
+        self.library_summary = QLabel("В медиатеке пока нет файлов")
+        self.library_summary.setObjectName("sectionTitle")
+        home_layout.addWidget(self.library_summary)
+        home_layout.addStretch()
+        self.pages.addWidget(home)
 
         library_page = QWidget()
         lib = QVBoxLayout(library_page)
+        lib.setContentsMargins(30, 28, 30, 24)
+        lib.setSpacing(14)
+        lib_title = QLabel("Медиатека")
+        lib_title.setObjectName("pageTitle")
+        lib.addWidget(lib_title)
         top = QHBoxLayout()
         self.search = QLineEdit()
         self.search.setPlaceholderText("Поиск по медиатеке")
         self.search.textChanged.connect(self.filter_library)
-        top.addWidget(self.search)
+        top.addWidget(self.search, 1)
         add = QPushButton("Добавить файлы")
         add.clicked.connect(self.add_files)
         top.addWidget(add)
@@ -96,98 +166,23 @@ class MediaPlayer(QMainWindow):
         top.addWidget(sync)
         lib.addLayout(top)
         self.track_list = QListWidget()
+        self.track_list.setObjectName("trackList")
         self.track_list.itemDoubleClicked.connect(self.play_selected)
-        lib.addWidget(self.track_list)
+        lib.addWidget(self.track_list, 1)
         actions = QHBoxLayout()
-        for label, callback in (("Новый плейлист", self.create_playlist), ("Сохранить плейлист", self.save_playlist), ("Открыть плейлист", self.open_playlist), ("Удалить из списка", self.remove_track)):
+        for label, callback in [("Новый плейлист", self.create_playlist), ("Сохранить плейлист", self.save_playlist), ("Открыть плейлист", self.open_playlist), ("Удалить из списка", self.remove_track)]:
             button = QPushButton(label)
             button.clicked.connect(callback)
             actions.addWidget(button)
         lib.addLayout(actions)
-        self.tabs.addTab(library_page, "Медиатека")
-
-        player_page = QWidget()
-        p = QVBoxLayout(player_page)
-        self.now_playing = QLabel("Ничего не воспроизводится")
-        self.now_playing.setAlignment(Qt.AlignCenter)
-        self.now_playing.setMinimumHeight(100)
-        p.addWidget(self.now_playing)
-        self.track_position = QSlider(Qt.Horizontal)
-        self.track_position.sliderPressed.connect(lambda: setattr(self, "user_seeking", True))
-        self.track_position.sliderReleased.connect(self.seek)
-        p.addWidget(self.track_position)
-        times = QHBoxLayout()
-        self.elapsed = QLabel("00:00")
-        self.duration = QLabel("00:00")
-        times.addWidget(self.elapsed)
-        times.addStretch()
-        times.addWidget(self.duration)
-        p.addLayout(times)
-        controls = QHBoxLayout()
-        for label, callback in (("⏮", self.previous_track), ("▶ / ⏸", self.toggle_play), ("⏭", self.next_track), ("Перемешать", self.toggle_shuffle), ("Повтор: выкл.", self.toggle_repeat)):
-            b = QPushButton(label)
-            b.clicked.connect(callback)
-            controls.addWidget(b)
-            if label.startswith("Повтор"):
-                self.repeat_button = b
-        p.addLayout(controls)
-        volume_row = QHBoxLayout()
-        volume_row.addWidget(QLabel("Громкость"))
-        self.volume = QSlider(Qt.Horizontal)
-        self.volume.setRange(0, 100)
-        self.volume.setValue(int(self.settings.get("volume", 70)))
-        self.volume.valueChanged.connect(self.set_volume)
-        volume_row.addWidget(self.volume)
-        p.addLayout(volume_row)
-        self.tabs.addTab(player_page, "Плеер")
-
-        settings_page = QWidget()
-        form = QFormLayout(settings_page)
-        self.search_enabled = QCheckBox("Искать аудио при синхронизации")
-        self.search_enabled.setChecked(self.settings.get("search_enabled", True))
-        form.addRow(self.search_enabled)
-        self.scan_video = QCheckBox("Искать видеофайлы и воспроизводить их аудиодорожку")
-        self.scan_video.setChecked(self.settings.get("scan_video", True))
-        form.addRow(self.scan_video)
-        self.roots_label = QLabel("\n".join(self.settings.get("scan_roots", [])) or "Папки не выбраны")
-        roots_btn = QPushButton("Выбрать диски и папки")
-        roots_btn.clicked.connect(self.add_scan_root)
-        form.addRow(roots_btn, self.roots_label)
-        self.excluded_label = QLabel("\n".join(self.settings.get("excluded_paths", [])) or "Исключений нет")
-        exclude_btn = QPushButton("Исключить папку или диск")
-        exclude_btn.clicked.connect(self.add_exclusion)
-        form.addRow(exclude_btn, self.excluded_label)
-        self.theme = QComboBox()
-        self.theme.addItems(["Spotify", "Яндекс Музыка", "SoundCloud", "Свой стиль"])
-        self.theme.setCurrentText(self.settings.get("theme", "Spotify"))
-        self.theme.currentTextChanged.connect(self.change_theme)
-        form.addRow("Стиль", self.theme)
-        self.accent = QLineEdit(self.settings.get("accent", "#1DB954"))
-        form.addRow("Цвет акцента", self.accent)
-        self.font = QLineEdit(self.settings.get("font", "Segoe UI"))
-        form.addRow("Шрифт", self.font)
-        self.font_size = QSpinBox()
-        self.font_size.setRange(8, 24)
-        self.font_size.setValue(int(self.settings.get("font_size", 10)))
-        form.addRow("Размер шрифта", self.font_size)
-        save = QPushButton("Сохранить настройки")
-        save.clicked.connect(self.save_settings)
-        form.addRow(save)
-        preset_name = QLineEdit()
-        preset_name.setPlaceholderText("Название UI-пресета")
-        self.preset_name = preset_name
-        save_preset = QPushButton("Сохранить UI-пресет")
-        save_preset.clicked.connect(self.save_ui_preset)
-        form.addRow(preset_name, save_preset)
-        self.preset_selector = QComboBox()
-        self.preset_selector.addItems(sorted(self.ui_config.get("presets", {}).keys()))
-        load_preset = QPushButton("Применить UI-пресет")
-        load_preset.clicked.connect(self.load_ui_preset)
-        form.addRow(self.preset_selector, load_preset)
-        self.tabs.addTab(settings_page, "Настройки")
+        self.pages.addWidget(library_page)
 
         eq_page = QWidget()
         eq = QVBoxLayout(eq_page)
+        eq.setContentsMargins(30, 28, 30, 24)
+        eq_title = QLabel("Эквалайзер")
+        eq_title.setObjectName("pageTitle")
+        eq.addWidget(eq_title)
         self.eq_enabled = QCheckBox("Включить эквалайзер")
         self.eq_enabled.setChecked(self.settings.get("eq_enabled", False))
         eq.addWidget(self.eq_enabled)
@@ -204,26 +199,31 @@ class MediaPlayer(QMainWindow):
             eq.addLayout(line)
             self.eq_sliders.append(slider)
         presets = QHBoxLayout()
-        for name, vals in (("Речь", [-4,-3,-2,2,4,5,3,1,0,0]), ("Бас", [8,7,5,2,0,-2,-3,-3,-2,-2]), ("Спокойный", [2,1,0,1,2,1,0,-1,-2,-2]), ("Сброс", [0]*10)):
-            btn = QPushButton(name)
-            btn.clicked.connect(lambda checked=False, v=vals: self.set_eq_values(v))
-            presets.addWidget(btn)
+        for name, vals in [("Речь", [-4,-3,-2,2,4,5,3,1,0,0]), ("Бас", [8,7,5,2,0,-2,-3,-3,-2,-2]), ("Спокойный", [2,1,0,1,2,1,0,-1,-2,-2]), ("Сброс", [0]*10)]:
+            button = QPushButton(name)
+            button.clicked.connect(lambda checked=False, v=vals: self.set_eq_values(v))
+            presets.addWidget(button)
         eq.addLayout(presets)
         save_eq = QPushButton("Сохранить эквалайзер")
         save_eq.clicked.connect(self.save_settings)
         eq.addWidget(save_eq)
-        self.tabs.addTab(eq_page, "Эквалайзер")
+        eq.addStretch()
+        self.pages.addWidget(eq_page)
 
         tags_page = QWidget()
         tag_form = QFormLayout(tags_page)
+        tag_form.setContentsMargins(30, 28, 30, 24)
+        tag_title = QLabel("Редактор тегов")
+        tag_title.setObjectName("pageTitle")
+        tag_form.addRow(tag_title)
         self.tag_title = QLineEdit()
         self.tag_artist = QLineEdit()
         self.tag_genre = QLineEdit()
         self.tag_date = QLineEdit()
         self.cover_path = QLineEdit()
+        self.tag_file = QLabel("Выберите трек в медиатеке")
         cover_btn = QPushButton("Выбрать обложку")
         cover_btn.clicked.connect(self.choose_cover)
-        self.tag_file = QLabel("Выберите трек в медиатеке")
         tag_form.addRow(self.tag_file)
         tag_form.addRow("Название", self.tag_title)
         tag_form.addRow("Исполнитель", self.tag_artist)
@@ -234,8 +234,109 @@ class MediaPlayer(QMainWindow):
         save_tags = QPushButton("Записать теги в файл")
         save_tags.clicked.connect(self.save_tags)
         tag_form.addRow(save_tags)
-        self.tabs.addTab(tags_page, "Теги")
+        self.pages.addWidget(tags_page)
 
+        settings_page = QWidget()
+        form = QFormLayout(settings_page)
+        form.setContentsMargins(30, 28, 30, 24)
+        form.setVerticalSpacing(14)
+        settings_title = QLabel("Настройки")
+        settings_title.setObjectName("pageTitle")
+        form.addRow(settings_title)
+        self.search_enabled = QCheckBox("Искать аудио при синхронизации")
+        self.search_enabled.setChecked(self.settings.get("search_enabled", True))
+        form.addRow(self.search_enabled)
+        self.scan_video = QCheckBox("Искать видеофайлы и воспроизводить их аудиодорожку")
+        self.scan_video.setChecked(self.settings.get("scan_video", True))
+        form.addRow(self.scan_video)
+        self.roots_label = QLabel("\\n".join(self.settings.get("scan_roots", [])) or "Папки не выбраны")
+        roots_btn = QPushButton("Выбрать диски и папки")
+        roots_btn.clicked.connect(self.add_scan_root)
+        form.addRow(roots_btn, self.roots_label)
+        self.excluded_label = QLabel("\\n".join(self.settings.get("excluded_paths", [])) or "Исключений нет")
+        exclude_btn = QPushButton("Исключить папку или диск")
+        exclude_btn.clicked.connect(self.add_exclusion)
+        form.addRow(exclude_btn, self.excluded_label)
+        self.theme = QComboBox()
+        self.theme.addItems(["Яндекс Музыка", "Spotify", "SoundCloud", "Свой стиль"])
+        self.theme.setCurrentText(self.settings.get("theme", "Яндекс Музыка"))
+        self.theme.currentTextChanged.connect(self.change_theme)
+        form.addRow("Оформление", self.theme)
+        self.accent = QLineEdit(self.settings.get("accent", "#F5C400"))
+        form.addRow("Цвет акцента", self.accent)
+        self.font = QLineEdit(self.settings.get("font", "Segoe UI"))
+        form.addRow("Шрифт", self.font)
+        self.font_size = QSpinBox()
+        self.font_size.setRange(8, 24)
+        self.font_size.setValue(int(self.settings.get("font_size", 10)))
+        form.addRow("Размер шрифта", self.font_size)
+        save = QPushButton("Сохранить настройки")
+        save.clicked.connect(self.save_settings)
+        form.addRow(save)
+        self.preset_name = QLineEdit()
+        self.preset_name.setPlaceholderText("Название пользовательского пресета")
+        save_preset = QPushButton("Сохранить пресет")
+        save_preset.clicked.connect(self.save_ui_preset)
+        form.addRow(self.preset_name, save_preset)
+        self.preset_selector = QComboBox()
+        self.preset_selector.addItems(sorted(self.ui_config.get("presets", {}).keys()))
+        load_preset = QPushButton("Применить пресет")
+        load_preset.clicked.connect(self.load_ui_preset)
+        form.addRow(self.preset_selector, load_preset)
+        self.pages.addWidget(settings_page)
+
+        outer.addWidget(self.pages, 1)
+
+        self.player_panel = QFrame()
+        self.player_panel.setObjectName("playerPanel")
+        self.player_panel.setFixedWidth(276)
+        player_layout = QVBoxLayout(self.player_panel)
+        player_layout.setContentsMargins(18, 24, 18, 20)
+        player_layout.setSpacing(14)
+        panel_heading = QLabel("СЕЙЧАС ИГРАЕТ")
+        panel_heading.setObjectName("eyebrow")
+        player_layout.addWidget(panel_heading)
+        self.cover_art = QLabel("♫")
+        self.cover_art.setObjectName("coverPlaceholder")
+        self.cover_art.setAlignment(Qt.AlignCenter)
+        self.cover_art.setMinimumHeight(210)
+        player_layout.addWidget(self.cover_art)
+        self.now_playing = QLabel("Ничего не воспроизводится")
+        self.now_playing.setObjectName("trackTitle")
+        self.now_playing.setWordWrap(True)
+        self.now_playing.setAlignment(Qt.AlignCenter)
+        player_layout.addWidget(self.now_playing)
+        self.track_position = QSlider(Qt.Horizontal)
+        self.track_position.sliderPressed.connect(lambda: setattr(self, "user_seeking", True))
+        self.track_position.sliderReleased.connect(self.seek)
+        player_layout.addWidget(self.track_position)
+        times = QHBoxLayout()
+        self.elapsed = QLabel("00:00")
+        self.duration = QLabel("00:00")
+        times.addWidget(self.elapsed)
+        times.addStretch()
+        times.addWidget(self.duration)
+        player_layout.addLayout(times)
+        controls = QHBoxLayout()
+        for label, callback in [("⏮", self.previous_track), ("▶ / ⏸", self.toggle_play), ("⏭", self.next_track), ("Перемешать", self.toggle_shuffle), ("Повтор: выкл.", self.toggle_repeat)]:
+            button = QPushButton(label)
+            button.clicked.connect(callback)
+            controls.addWidget(button)
+            if label.startswith("Повтор"):
+                self.repeat_button = button
+        player_layout.addLayout(controls)
+        volume_row = QHBoxLayout()
+        volume_row.addWidget(QLabel("Громкость"))
+        self.volume = QSlider(Qt.Horizontal)
+        self.volume.setRange(0, 100)
+        self.volume.setValue(int(self.settings.get("volume", 70)))
+        self.volume.valueChanged.connect(self.set_volume)
+        volume_row.addWidget(self.volume)
+        player_layout.addLayout(volume_row)
+        player_layout.addStretch()
+        outer.addWidget(self.player_panel)
+
+        self.show_page(0, self.nav_buttons[0])
         menu = self.menuBar().addMenu("Файл")
         open_action = QAction("Открыть файлы", self)
         open_action.triggered.connect(self.add_files)
@@ -243,6 +344,25 @@ class MediaPlayer(QMainWindow):
         exit_action = QAction("Выход", self)
         exit_action.triggered.connect(self.close)
         menu.addAction(exit_action)
+
+    def show_page(self, index, active_button=None):
+        self.pages.setCurrentIndex(index)
+        for button in self.nav_buttons:
+            button.setProperty("active", button is active_button)
+            button.style().unpolish(button)
+            button.style().polish(button)
+        if index == 0:
+            self.update_overview()
+
+    def update_overview(self):
+        count = len(self.library)
+        self.library_summary.setText(f"В медиатеке: {count} файлов")
+        if 0 <= self.current_index < count:
+            self.overview_now.setText(self.display_name(self.library[self.current_index]))
+        elif count:
+            self.overview_now.setText(f"В вашей медиатеке {count} файлов. Выберите трек, чтобы начать воспроизведение.")
+        else:
+            self.overview_now.setText("Добавьте музыку или синхронизируйте выбранные папки.")
 
     def supported_extensions(self):
         audio = {".mp3", ".ogg", ".oga", ".wav", ".flac", ".m4a", ".aac", ".opus", ".wma", ".aiff"}
@@ -368,6 +488,8 @@ class MediaPlayer(QMainWindow):
         self.player.set_media(media)
         self.player.play()
         self.now_playing.setText(self.display_name(self.library[index]))
+        self.overview_now.setText(self.display_name(self.library[index]))
+        self.cover_art.setText("♫")
         self.load_tags(self.library[index])
         self.apply_equalizer()
 
@@ -485,22 +607,58 @@ class MediaPlayer(QMainWindow):
 
     def change_theme(self, name):
         self.settings["theme"] = name
+        if name in self.ui_config.get("presets", {}):
+            self.ui_config["active_preset"] = name
+            UI_FILE.write_text(json.dumps(self.ui_config, ensure_ascii=False, indent=2), encoding="utf-8")
         self.apply_theme()
 
     def apply_theme(self):
-        presets = {
-            "Spotify": ("#121212", "#1DB954", "#FFFFFF"),
-            "Яндекс Музыка": ("#171717", "#FFCC00", "#FFFFFF"),
-            "SoundCloud": ("#171717", "#FF5500", "#FFFFFF"),
-            "Свой стиль": ("#171717", self.accent.text() if hasattr(self, "accent") else "#7C5CFC", "#FFFFFF")
-        }
-        bg, accent, fg = presets.get(self.settings.get("theme", "Spotify"), presets["Spotify"])
-        if hasattr(self, "accent") and self.settings.get("theme") == "Свой стиль":
+        presets = self.ui_config.get("presets", {})
+        theme_name = self.settings.get("theme", "Яндекс Музыка")
+        preset = presets.get(theme_name, presets.get("Яндекс Музыка", {}))
+        if theme_name == "Свой стиль":
+            preset = {"background": "#171717", "panel": "#202020", "sidebar": "#151515", "accent": self.accent.text() if hasattr(self, "accent") else "#7C5CFC", "text": "#FFFFFF", "muted": "#AAAAAA"}
+        bg = preset.get("background", "#121214")
+        panel = preset.get("panel", "#1B1B1F")
+        sidebar = preset.get("sidebar", "#151518")
+        accent = preset.get("accent", "#F5C400")
+        fg = preset.get("text", "#F7F7F8")
+        muted = preset.get("muted", "#A5A5AC")
+        if hasattr(self, "accent") and theme_name == "Свой стиль":
             accent = self.accent.text() or accent
         font = self.font.text() if hasattr(self, "font") else self.settings.get("font", "Segoe UI")
         size = self.font_size.value() if hasattr(self, "font_size") else self.settings.get("font_size", 10)
         self.setFont(QFont(font, size))
-        self.setStyleSheet(f"QMainWindow,QWidget{{background:{bg};color:{fg};}} QPushButton{{background:#292929;border:0;border-radius:8px;padding:9px 13px;}} QPushButton:hover{{background:{accent};color:#111;}} QLineEdit,QListWidget,QComboBox{{background:#242424;border:1px solid #383838;border-radius:6px;padding:7px;color:{fg};}} QSlider::groove:horizontal{{height:5px;background:#444;}} QSlider::handle:horizontal{{background:{accent};width:13px;margin:-5px 0;border-radius:6px;}} QTabBar::tab{{padding:10px 18px;background:#222;}} QTabBar::tab:selected{{background:{accent};color:#111;}}")
+        self.setStyleSheet(f"""
+            QMainWindow,QWidget#contentStack {{ background:{bg}; color:{fg}; }}
+            QWidget {{ color:{fg}; }}
+            QFrame#sidebar {{ background:{sidebar}; border:0; }}
+            QFrame#playerPanel {{ background:{panel}; border-left:1px solid #303035; }}
+            QLabel#brand {{ color:{accent}; font-size:17px; font-weight:800; letter-spacing:2px; }}
+            QLabel#pageTitle {{ font-size:28px; font-weight:750; }}
+            QLabel#heroTitle {{ font-size:22px; font-weight:700; }}
+            QLabel#sectionTitle {{ font-size:16px; font-weight:650; }}
+            QLabel#trackTitle {{ font-size:15px; font-weight:650; }}
+            QLabel#eyebrow {{ color:{muted}; font-size:10px; font-weight:700; letter-spacing:1.5px; }}
+            QLabel#mutedText {{ color:{muted}; }}
+            QLabel#coverPlaceholder {{ background:{bg}; border:1px solid #34343A; border-radius:14px; color:{accent}; font-size:68px; }}
+            QFrame#heroCard {{ background:{panel}; border:1px solid #303035; border-radius:16px; padding:18px; }}
+            QPushButton {{ background:#29292E; border:0; border-radius:9px; padding:10px 13px; color:{fg}; }}
+            QPushButton:hover {{ background:{accent}; color:#111111; }}
+            QPushButton#navButton {{ background:transparent; color:{muted}; text-align:left; padding:12px 13px; border-radius:9px; }}
+            QPushButton#navButton:hover {{ background:#29292E; color:{fg}; }}
+            QPushButton#navButton[active="true"] {{ background:{panel}; color:{accent}; font-weight:700; }}
+            QLineEdit,QListWidget,QComboBox,QSpinBox {{ background:{panel}; border:1px solid #38383F; border-radius:8px; padding:8px; color:{fg}; selection-background-color:{accent}; }}
+            QListWidget#trackList {{ border:0; background:{bg}; alternate-background-color:{panel}; padding:6px; }}
+            QListWidget::item {{ padding:11px 10px; border-radius:7px; }}
+            QListWidget::item:selected {{ background:{panel}; color:{accent}; }}
+            QCheckBox {{ spacing:9px; }}
+            QSlider::groove:horizontal {{ height:5px; background:#45454B; border-radius:2px; }}
+            QSlider::handle:horizontal {{ background:{accent}; width:13px; height:13px; margin:-5px 0; border-radius:6px; }}
+            QMenuBar {{ background:{sidebar}; color:{fg}; }}
+            QMenuBar::item:selected {{ background:{panel}; }}
+            QMenu {{ background:{panel}; color:{fg}; border:1px solid #38383F; }}
+        """)
 
     def save_ui_preset(self):
         name = self.preset_name.text().strip()
@@ -543,6 +701,7 @@ class MediaPlayer(QMainWindow):
     def closeEvent(self, event):
         self.player.stop()
         self.save_settings_silent()
+        UI_FILE.write_text(json.dumps(self.ui_config, ensure_ascii=False, indent=2), encoding="utf-8")
         event.accept()
 
     def save_settings_silent(self):
