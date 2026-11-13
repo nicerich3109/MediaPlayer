@@ -174,6 +174,11 @@ class MediaPlayer(QMainWindow):
         save_preset = QPushButton("Сохранить UI-пресет")
         save_preset.clicked.connect(self.save_ui_preset)
         form.addRow(preset_name, save_preset)
+        self.preset_selector = QComboBox()
+        self.preset_selector.addItems(sorted(self.ui_config.get("presets", {}).keys()))
+        load_preset = QPushButton("Применить UI-пресет")
+        load_preset.clicked.connect(self.load_ui_preset)
+        form.addRow(self.preset_selector, load_preset)
         self.tabs.addTab(settings_page, "Настройки")
 
         eq_page = QWidget()
@@ -501,6 +506,20 @@ class MediaPlayer(QMainWindow):
             "font": self.font.text(), "font_size": self.font_size.value()
         }
         UI_FILE.write_text(json.dumps(self.ui_config, ensure_ascii=False, indent=2), encoding="utf-8")
+        if self.preset_selector.findText(name) < 0:
+            self.preset_selector.addItem(name)
+        self.preset_selector.setCurrentText(name)
+
+    def load_ui_preset(self):
+        preset = self.ui_config.get("presets", {}).get(self.preset_selector.currentText())
+        if not preset:
+            return
+        self.theme.setCurrentText(preset.get("theme", "Свой стиль"))
+        self.accent.setText(preset.get("accent", "#1DB954"))
+        self.font.setText(preset.get("font", "Segoe UI"))
+        self.font_size.setValue(int(preset.get("font_size", 10)))
+        self.settings.update(preset)
+        self.apply_theme()
 
     def save_settings(self):
         self.settings.update({
