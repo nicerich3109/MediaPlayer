@@ -698,14 +698,23 @@ class MediaPlayer(QMainWindow):
         self.preset_selector.setCurrentText(name)
 
     def load_ui_preset(self):
-        preset = self.ui_config.get("presets", {}).get(self.preset_selector.currentText())
+        preset_name = self.preset_selector.currentText()
+        preset = self.ui_config.get("presets", {}).get(preset_name)
         if not preset:
             return
-        self.theme.setCurrentText(preset.get("theme", "Свой стиль"))
-        self.accent.setText(preset.get("accent", "#1DB954"))
+        theme_name = preset.get("theme", preset_name)
+        if theme_name not in self.ui_config.get("presets", {}):
+            theme_name = "Свой стиль"
+        self.theme.setCurrentText(theme_name)
+        self.accent.setText(preset.get("accent", preset.get("accent_color", "#F5C400")))
         self.font.setText(preset.get("font", "Segoe UI"))
         self.font_size.setValue(int(preset.get("font_size", 10)))
-        self.settings.update(preset)
+        self.settings["theme"] = theme_name
+        self.settings["accent"] = self.accent.text()
+        self.settings["font"] = self.font.text()
+        self.settings["font_size"] = self.font_size.value()
+        if theme_name in self.ui_config.get("presets", {}):
+            self.ui_config["active_preset"] = theme_name
         self.apply_theme()
 
     def save_settings(self):
