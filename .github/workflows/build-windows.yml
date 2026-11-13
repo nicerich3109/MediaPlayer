@@ -24,6 +24,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Validate Python and UI configuration
+        shell: pwsh
+        run: |
+          python -m py_compile main.py
+          python -m json.tool config/ui.json | Out-Null
+
       - name: Install VLC runtime
         shell: pwsh
         run: |
