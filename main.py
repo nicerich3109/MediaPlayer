@@ -4,6 +4,11 @@ import random
 import sys
 from pathlib import Path
 
+if getattr(sys, "frozen", False):
+    VLC_RUNTIME = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
+    VLC_DLL_HANDLE = os.add_dll_directory(str(VLC_RUNTIME))
+    os.environ["VLC_PLUGIN_PATH"] = str(VLC_RUNTIME / "plugins")
+
 import vlc
 from mutagen import File as MutagenFile
 from mutagen.id3 import ID3, TIT2, TPE1, TCON, TDRC, APIC
@@ -15,7 +20,7 @@ from PySide6.QtWidgets import (
     QFormLayout, QComboBox, QCheckBox, QMessageBox, QInputDialog, QSpinBox, QListWidgetItem
 )
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 DATA = ROOT / "data"
 PLAYLISTS = DATA / "playlists"
 CONFIG = ROOT / "config"
