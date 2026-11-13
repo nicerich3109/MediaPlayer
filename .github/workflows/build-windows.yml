@@ -1,4 +1,5 @@
 name: Build Windows executable
+run-name: MediaPlayer Windows x64 build
 
 on:
   workflow_dispatch:
