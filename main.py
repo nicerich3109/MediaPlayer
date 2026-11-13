@@ -12,7 +12,7 @@ from PySide6.QtGui import QAction, QFont, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QListWidget,
     QPushButton, QLabel, QSlider, QFileDialog, QLineEdit, QTabWidget,
-    QFormLayout, QComboBox, QCheckBox, QMessageBox, QInputDialog, QSpinBox
+    QFormLayout, QComboBox, QCheckBox, QMessageBox, QInputDialog, QSpinBox, QListWidgetItem
 )
 
 ROOT = Path(__file__).resolve().parent
@@ -248,7 +248,9 @@ class MediaPlayer(QMainWindow):
         path = str(Path(file).resolve())
         if path not in self.library and Path(path).suffix.lower() in self.supported_extensions():
             self.library.append(path)
-            self.track_list.addItem(self.display_name(path))
+            item = QListWidgetItem(self.display_name(path))
+            item.setData(Qt.UserRole, path)
+            self.track_list.addItem(item)
 
     def display_name(self, path):
         try:
@@ -266,7 +268,9 @@ class MediaPlayer(QMainWindow):
         self.track_list.clear()
         for path in self.library:
             if query.casefold() in self.display_name(path).casefold():
-                self.track_list.addItem(self.display_name(path))
+                item = QListWidgetItem(self.display_name(path))
+                item.setData(Qt.UserRole, path)
+                self.track_list.addItem(item)
 
     def scan_library(self):
         if not self.search_enabled.isChecked():
@@ -310,8 +314,8 @@ class MediaPlayer(QMainWindow):
         name, ok = QInputDialog.getText(self, "Сохранить плейлист", "Имя файла:")
         if not ok or not name.strip():
             return
-        paths = [self.library[i] for i in range(self.track_list.count()) if self.track_list.item(i).isSelected()]
-        if not paths and self.current_index >= 0:
+        paths = [item.data(Qt.UserRole) for item in self.track_list.selectedItems()]
+        if not paths:
             paths = self.library[:]
         safe = "".join(c for c in name.strip() if c.isalnum() or c in " _-")
         (PLAYLISTS / f"{safe}.json").write_text(json.dumps({"name": name, "tracks": paths}, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -324,20 +328,26 @@ class MediaPlayer(QMainWindow):
         self.library = [p for p in data.get("tracks", []) if Path(p).exists()]
         self.track_list.clear()
         for path in self.library:
-            self.track_list.addItem(self.display_name(path))
+            item = QListWidgetItem(self.display_name(path))
+            item.setData(Qt.UserRole, path)
+            self.track_list.addItem(item)
 
     def remove_track(self):
-        row = self.track_list.currentRow()
-        if row >= 0:
-            self.track_list.takeItem(row)
-            if row < len(self.library):
-                self.library.pop(row)
+        item = self.track_list.currentItem()
+        if item:
+            path = item.data(Qt.UserRole)
+            self.track_list.takeItem(self.track_list.row(item))
+            if path in self.library:
+                self.library.remove(path)
+            self.current_index = -1
 
     def play_selected(self):
-        row = self.track_list.currentRow()
-        if row >= 0:
-            self.current_index = row
-            self.play_index(row)
+        item = self.track_list.currentItem()
+        if item:
+            path = item.data(Qt.UserRole)
+            if path in self.library:
+                self.current_index = self.library.index(path)
+                self.play_index(self.current_index)
 
     def play_index(self, index):
         if not self.library:
@@ -408,7 +418,7 @@ class MediaPlayer(QMainWindow):
 
     def apply_equalizer(self):
         if not self.eq_enabled.isChecked():
-            self.player.set_equalizer(None)
+            self.player.audio_set_equalizer(None)
             return
         eq = vlc.AudioEqualizer()
         for index, slider in enumerate(self.eq_sliders):
@@ -416,7 +426,7 @@ class MediaPlayer(QMainWindow):
                 eq.set_amp_at_index(float(slider.value()), index)
             except Exception:
                 pass
-        self.player.set_equalizer(eq)
+        self.player.audio_set_equalizer(eq)
 
     def load_tags(self, path):
         self.tag_file.setText(Path(path).name)
@@ -447,6 +457,12 @@ class MediaPlayer(QMainWindow):
             if self.tag_date.text():
                 audio["date"] = self.tag_date.text()
             audio.save()
+            cover = self.cover_path.text().strip()
+            if cover and Path(cover).is_file() and Path(path).suffix.lower() == ".mp3":
+                tags = ID3(path)
+                tags.delall("APIC")
+                tags.add(APIC(encoding=3, mime="image/jpeg" if cover.lower().endswith((".jpg", ".jpeg")) else "image/png", type=3, desc="Cover", data=Path(cover).read_bytes()))
+                tags.save(path)
             QMessageBox.information(self, "Теги", "Теги сохранены.")
             self.filter_library(self.search.text())
         except Exception as exc:
