@@ -168,6 +168,7 @@ class MediaPlayer(QMainWindow):
         self.track_list = QListWidget()
         self.track_list.setObjectName("trackList")
         self.track_list.itemDoubleClicked.connect(self.play_selected)
+        self.track_list.currentItemChanged.connect(self.on_track_selected)
         lib.addWidget(self.track_list, 1)
         actions = QHBoxLayout()
         for label, callback in [("Новый плейлист", self.create_playlist), ("Сохранить плейлист", self.save_playlist), ("Открыть плейлист", self.open_playlist), ("Удалить из списка", self.remove_track)]:
@@ -381,6 +382,7 @@ class MediaPlayer(QMainWindow):
             item = QListWidgetItem(self.display_name(path))
             item.setData(Qt.UserRole, path)
             self.track_list.addItem(item)
+            self.update_overview()
 
     def display_name(self, path):
         try:
@@ -470,6 +472,12 @@ class MediaPlayer(QMainWindow):
             if path in self.library:
                 self.library.remove(path)
             self.current_index = -1
+
+    def on_track_selected(self, current, previous=None):
+        if current:
+            path = current.data(Qt.UserRole)
+            if path:
+                self.load_tags(path)
 
     def play_selected(self):
         item = self.track_list.currentItem()
@@ -575,10 +583,13 @@ class MediaPlayer(QMainWindow):
             self.tag_date.clear()
 
     def save_tags(self):
-        if self.current_index < 0:
-            QMessageBox.warning(self, "Теги", "Сначала выберите и воспроизведите файл.")
+        selected = self.track_list.currentItem() if hasattr(self, "track_list") else None
+        path = selected.data(Qt.UserRole) if selected else None
+        if not path and 0 <= self.current_index < len(self.library):
+            path = self.library[self.current_index]
+        if not path or not Path(path).is_file():
+            QMessageBox.warning(self, "Теги", "Сначала выберите файл в медиатеке.")
             return
-        path = self.library[self.current_index]
         try:
             audio = MutagenFile(path, easy=True)
             if audio is None:
