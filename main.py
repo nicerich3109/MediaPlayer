@@ -58,6 +58,9 @@ class MediaPlayer(QMainWindow):
         super().__init__()
         self.settings = load_json(SETTINGS_FILE, DEFAULT_SETTINGS)
         self.ui_config = load_json(UI_FILE, {"active_preset": "Яндекс Музыка", "presets": {"Яндекс Музыка": {"background": "#121214", "panel": "#1B1B1F", "sidebar": "#151518", "accent": "#F5C400", "text": "#F7F7F8", "muted": "#A5A5AC"}, "Spotify": {"background": "#121212", "panel": "#181818", "sidebar": "#101010", "accent": "#1ED760", "text": "#FFFFFF", "muted": "#A7A7A7"}, "SoundCloud": {"background": "#101010", "panel": "#1A1A1A", "sidebar": "#141414", "accent": "#FF5500", "text": "#FFFFFF", "muted": "#A8A8A8"}}})
+        active_preset = self.ui_config.get("active_preset")
+        if active_preset in self.ui_config.get("presets", {}):
+            self.settings["theme"] = active_preset
         self.instance = vlc.Instance("--no-video-title-show")
         self.player = self.instance.media_player_new()
         self.library = []
