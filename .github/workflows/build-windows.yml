@@ -44,6 +44,9 @@ jobs:
           if (!(Test-Path "dist\MediaPlayer\MediaPlayer.exe")) {
             throw "Executable was not created"
           }
+          if (Test-Path "config") {
+            Copy-Item -Path "config" -Destination "dist\MediaPlayer\config" -Recurse -Force
+          }
           Compress-Archive -Path "dist\MediaPlayer\*" -DestinationPath "MediaPlayer-Windows-x64.zip" -Force
 
       - name: Upload portable application
